@@ -5,8 +5,14 @@ echo "║         TeXRA Auto-Setup v1.0         ║"
 echo "╚════════════════════════════════════════╝"
 echo ""
 
-# Check if we have configuration
-if [ -z "$TEXRA_CONFIG" ]; then
+# Check if we have configuration from file or environment
+if [ -f "/tmp/texra-config.json" ]; then
+    echo "📄 Found configuration file"
+    CONFIG=$(cat /tmp/texra-config.json)
+elif [ ! -z "$TEXRA_CONFIG" ]; then
+    echo "🔧 Found environment configuration"
+    CONFIG=$(echo "$TEXRA_CONFIG" | base64 -d)
+else
     echo "ℹ️  No auto-configuration detected."
     echo ""
     echo "To manually set up your repository, run:"
@@ -71,11 +77,32 @@ fi
 
 echo "📦 Auto-configuring your repository..."
 
-# Decode configuration
-CONFIG=$(echo "$TEXRA_CONFIG" | base64 -d)
-REPO_URL=$(echo "$CONFIG" | jq -r '.url')
-USERNAME=$(echo "$CONFIG" | jq -r '.user // empty')
-TOKEN=$(echo "$CONFIG" | jq -r '.token // empty')
+# Parse configuration (already decoded above)
+REPO_URL=$(echo "$CONFIG" | jq -r '.repoUrl // .url')
+USERNAME=$(echo "$CONFIG" | jq -r '.username // .user // empty')
+TOKEN=$(echo "$CONFIG" | jq -r '.password // .token // empty')
+GIT_NAME=$(echo "$CONFIG" | jq -r '.gitName // empty')
+GIT_EMAIL=$(echo "$CONFIG" | jq -r '.gitEmail // empty')
+
+# For GitHub repos in Codespaces, use GitHub user info
+if [[ "$REPO_URL" == *"github.com"* ]] && [ ! -z "$GITHUB_USER" ]; then
+    if [ -z "$GIT_NAME" ]; then
+        GIT_NAME="$GITHUB_USER"
+    fi
+    if [ -z "$GIT_EMAIL" ]; then
+        # Try to get email from gh cli if available
+        GIT_EMAIL=$(gh api user --jq .email 2>/dev/null || echo "${GITHUB_USER}@users.noreply.github.com")
+    fi
+    echo "🔧 Using GitHub user: $GIT_NAME"
+fi
+
+# Set defaults if still empty
+if [ -z "$GIT_NAME" ]; then
+    GIT_NAME="TeXRA User"
+fi
+if [ -z "$GIT_EMAIL" ]; then
+    GIT_EMAIL="user@texra.ai"
+fi
 
 echo "📎 Repository: ${REPO_URL}"
 echo ""
@@ -148,9 +175,13 @@ echo "# TeXRA local excludes" >> /workspaces/texra-workspace/.git/info/exclude
 echo ".devcontainer" >> /workspaces/texra-workspace/.git/info/exclude
 echo ".vscode" >> /workspaces/texra-workspace/.git/info/exclude
 
+# Configure git user info
+git config --global user.name "${GIT_NAME}"
+git config --global user.email "${GIT_EMAIL}"
+
 # Clean up sensitive data
-rm -rf /tmp/user-repo /tmp/.devcontainer
-unset TEXRA_CONFIG TOKEN PASSWORD
+rm -rf /tmp/user-repo /tmp/.devcontainer /tmp/texra-config.json
+unset TEXRA_CONFIG TOKEN PASSWORD CONFIG
 
 # Show summary
 echo ""
