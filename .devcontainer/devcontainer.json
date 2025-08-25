@@ -1,19 +1,15 @@
 {
   "name": "TeXRA LaTeX Environment",
   "image": "sanjibsen/weblatex:latest",
-  
   "customizations": {
     "vscode": {
       "extensions": [
         "texra-ai.texra",
-        "James-Yu.latex-workshop",
-        "valentjn.vscode-ltex",
-        "streetsidesoftware.code-spell-checker",
-        "znck.grammarly"
+        "James-Yu.latex-workshop"
       ],
       "settings": {
         "latex-workshop.latex.autoBuild.run": "onSave",
-        "latex-workshop.latex.outDir": "./PDF",
+        "latex-workshop.latex.outDir": "./build",
         "latex-workshop.view.pdf.viewer": "tab",
         "latex-workshop.latex.autoClean.run": "onBuilt",
         "editor.wordWrap": "on",
@@ -26,10 +22,8 @@
   "postCreateCommand": "bash /workspaces/texra-workspace/.devcontainer/auto-setup.sh",
   "workspaceFolder": "/workspaces/texra-workspace",
   
-  "features": {
-    "ghcr.io/devcontainers/features/github-cli:1": {}
-  },
+  "features": {},
   
   "forwardPorts": [],
-  "remoteUser": "vscode"
+  "remoteUser": "root"
 }
