@@ -346,6 +346,7 @@ Versions
 *qwen*.*
 *diff*.tex
 *gemini*.*
+*grok*.*
 
 # Example and diff directories
 FiguresEx/
