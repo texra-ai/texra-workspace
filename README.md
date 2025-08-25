@@ -1,6 +1,6 @@
 # TeXRA Workspace
 
-This is the launcher repository for TeXRA - AI-powered LaTeX editing in GitHub Codespaces.
+This is the launcher repository for TeXRA - AI-powered LaTeX editing in GitHub Codespaces. Inspirations from [WebLaTex](https://github.com/sanjib-sen/WebLaTex/tree/main).
 
 ## Quick Start
 
