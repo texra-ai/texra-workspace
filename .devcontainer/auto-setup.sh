@@ -36,22 +36,40 @@ case $choice in
         git clone "$REPO_URL" /tmp/manual-repo
         ;;
     2)
-        echo "🔐 Authenticating with GitHub..."
-        gh auth login
         read -p "📎 Repository URL: " REPO_URL
-        gh repo clone "$REPO_URL" /tmp/manual-repo
+        echo "🔐 GitHub authentication required"
+        read -p "📧 GitHub Username: " GH_USER
+        read -s -p "🔑 Personal Access Token: " GH_TOKEN
+        echo ""
+        
+        # Extract repo path from URL
+        REPO_PATH=$(echo "$REPO_URL" | sed -E 's|https://github.com/||; s|\.git$||')
+        
+        echo "📥 Cloning private repository..."
+        git clone "https://${GH_USER}:${GH_TOKEN}@github.com/${REPO_PATH}" /tmp/manual-repo
         ;;
     3)
         read -p "📎 Overleaf Project URL: " PROJECT_URL
         
         # Check if we have Overleaf Codespace secrets
         if [ ! -z "$OVERLEAF_EMAIL" ] && [ ! -z "$OVERLEAF_TOKEN" ]; then
-            echo "🔐 Using Overleaf Codespace secrets for authentication"
+            echo "🔐 Found Overleaf Codespace secrets"
+            echo "   Email: $OVERLEAF_EMAIL"
+            # Validate token format
+            if [[ "$OVERLEAF_TOKEN" == olp_* ]]; then
+                echo "   Token: olp_****... (valid format)"
+            else
+                echo "   ⚠️  Warning: Token doesn't start with 'olp_'"
+            fi
             EMAIL="$OVERLEAF_EMAIL"
             PASSWORD="$OVERLEAF_TOKEN"
         else
+            echo ""
+            echo "⚠️  Overleaf requires Git authentication tokens (not passwords)"
+            echo "   Get your token from: https://www.overleaf.com/user/settings"
+            echo ""
             read -p "📧 Email: " EMAIL
-            read -s -p "🔑 Password: " PASSWORD
+            read -s -p "🔑 Git Token (starts with 'olp_'): " PASSWORD
             echo ""
         fi
         
@@ -154,6 +172,14 @@ REPO_URL=$(parse_json 'repoUrl' 'url' '')
 # Check if we should use Codespace secrets for Overleaf
 if [[ "$REPO_URL" == *"overleaf"* ]] && [ ! -z "$OVERLEAF_EMAIL" ] && [ ! -z "$OVERLEAF_TOKEN" ]; then
     echo "🔐 Using Overleaf Codespace secrets for authentication"
+    echo "   Email: $OVERLEAF_EMAIL"
+    # Validate token format
+    if [[ "$OVERLEAF_TOKEN" == olp_* ]]; then
+        echo "   Token: olp_****... (valid format)"
+    else
+        echo "   ⚠️  Warning: Token doesn't start with 'olp_'"
+        echo "   Get a valid token from: https://www.overleaf.com/user/settings"
+    fi
     USERNAME="$OVERLEAF_EMAIL"
     TOKEN="$OVERLEAF_TOKEN"
     GIT_EMAIL="$OVERLEAF_EMAIL"
@@ -235,13 +261,23 @@ if [[ "$REPO_URL" == *"overleaf"* ]]; then
     echo "https://${ENCODED_USERNAME}:${TOKEN}@git.overleaf.com" > ~/.git-credentials
     
     echo "📥 Cloning project ${PROJECT_ID}..."
-    git clone "https://${ENCODED_USERNAME}:${TOKEN}@git.overleaf.com/${PROJECT_ID}" /tmp/user-repo 2>/dev/null
+    # Show the clone command (with masked token)
+    MASKED_TOKEN=$(echo "$TOKEN" | sed 's/./*/g')
+    echo "   Command: git clone https://${ENCODED_USERNAME}:${MASKED_TOKEN}@git.overleaf.com/${PROJECT_ID}"
     
-    if [ $? -eq 0 ]; then
+    # Try to clone with error output
+    git clone "https://${ENCODED_USERNAME}:${TOKEN}@git.overleaf.com/${PROJECT_ID}" /tmp/user-repo 2>&1 | grep -v "^remote:"
+    
+    if [ ${PIPESTATUS[0]} -eq 0 ]; then
         echo "✅ Overleaf repository cloned successfully"
     else
         echo "❌ Failed to clone Overleaf repository"
-        echo "   Please check your credentials and project URL"
+        echo ""
+        echo "   Troubleshooting steps:"
+        echo "   1. Ensure you have a valid Git authentication token (not password)"
+        echo "   2. Get your token from: https://www.overleaf.com/user/settings"
+        echo "   3. Set Codespace secrets: OVERLEAF_EMAIL and OVERLEAF_TOKEN"
+        echo "   4. Verify the project URL is correct"
         exit 1
     fi
     
