@@ -5,13 +5,10 @@ echo "║         TeXRA Auto-Setup v1.0         ║"
 echo "╚════════════════════════════════════════╝"
 echo ""
 
-# Check if we have configuration from file or environment
+# Check if we have configuration file
 if [ -f "/tmp/texra-config.json" ]; then
     echo "📄 Found configuration file"
     CONFIG=$(cat /tmp/texra-config.json)
-elif [ ! -z "$TEXRA_CONFIG" ]; then
-    echo "🔧 Found environment configuration"
-    CONFIG=$(echo "$TEXRA_CONFIG" | base64 -d)
 else
     echo "ℹ️  No auto-configuration detected."
     echo ""
@@ -77,12 +74,53 @@ fi
 
 echo "📦 Auto-configuring your repository..."
 
-# Parse configuration (already decoded above)
-REPO_URL=$(echo "$CONFIG" | jq -r '.repoUrl // .url')
-USERNAME=$(echo "$CONFIG" | jq -r '.username // .user // empty')
-TOKEN=$(echo "$CONFIG" | jq -r '.password // .token // empty')
-GIT_NAME=$(echo "$CONFIG" | jq -r '.gitName // empty')
-GIT_EMAIL=$(echo "$CONFIG" | jq -r '.gitEmail // empty')
+# Utility function for JSON parsing with fallback
+parse_json() {
+    local key1="$1"
+    local key2="$2"
+    local default="${3:-}"
+    
+    # Try Python first (most reliable)
+    if command -v python3 &> /dev/null; then
+        local result=$(echo "$CONFIG" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    # Try first key, then fallback key, then default
+    value = data.get('$key1', '')
+    if not value and '$key2':
+        value = data.get('$key2', '')
+    print(value if value else '$default')
+except:
+    print('$default')
+" 2>/dev/null)
+        echo "${result:-$default}"
+    elif command -v python &> /dev/null; then
+        # Fallback to Python 2 if available
+        local result=$(echo "$CONFIG" | python -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    value = data.get('$key1', '')
+    if not value and '$key2':
+        value = data.get('$key2', '')
+    print value if value else '$default'
+except:
+    print '$default'
+" 2>/dev/null)
+        echo "${result:-$default}"
+    else
+        echo "⚠️  Warning: Python not available for JSON parsing" >&2
+        echo "$default"
+    fi
+}
+
+# Parse configuration with sensible defaults
+REPO_URL=$(parse_json 'repoUrl' 'url' '')
+USERNAME=$(parse_json 'username' 'user' '')  
+TOKEN=$(parse_json 'password' 'token' '')
+GIT_NAME=$(parse_json 'gitName' '' '')
+GIT_EMAIL=$(parse_json 'gitEmail' '' '')
 
 # For GitHub repos in Codespaces, use GitHub user info
 if [[ "$REPO_URL" == *"github.com"* ]] && [ ! -z "$GITHUB_USER" ]; then
@@ -91,7 +129,19 @@ if [[ "$REPO_URL" == *"github.com"* ]] && [ ! -z "$GITHUB_USER" ]; then
     fi
     if [ -z "$GIT_EMAIL" ]; then
         # Try to get email from gh cli if available
-        GIT_EMAIL=$(gh api user --jq .email 2>/dev/null || echo "${GITHUB_USER}@users.noreply.github.com")
+        if command -v gh &> /dev/null && command -v python3 &> /dev/null; then
+            GIT_EMAIL=$(gh api user 2>/dev/null | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    email = data.get('email', '')
+    print(email if email else '')
+except:
+    pass
+" 2>/dev/null)
+        fi
+        # Fallback to noreply email
+        GIT_EMAIL="${GIT_EMAIL:-${GITHUB_USER}@users.noreply.github.com}"
     fi
     echo "🔧 Using GitHub user: $GIT_NAME"
 fi
@@ -102,6 +152,15 @@ if [ -z "$GIT_NAME" ]; then
 fi
 if [ -z "$GIT_EMAIL" ]; then
     GIT_EMAIL="user@texra.ai"
+fi
+
+# Validate we have a repository URL
+if [ -z "$REPO_URL" ]; then
+    echo "❌ Error: No repository URL found in configuration"
+    echo ""
+    echo "Configuration file should contain:"
+    echo '  {"repoUrl": "...", "username": "...", "password": "..."}'
+    exit 1
 fi
 
 echo "📎 Repository: ${REPO_URL}"
@@ -181,7 +240,7 @@ git config --global user.email "${GIT_EMAIL}"
 
 # Clean up sensitive data
 rm -rf /tmp/user-repo /tmp/.devcontainer /tmp/texra-config.json
-unset TEXRA_CONFIG TOKEN PASSWORD CONFIG
+unset TOKEN PASSWORD CONFIG
 
 # Show summary
 echo ""
