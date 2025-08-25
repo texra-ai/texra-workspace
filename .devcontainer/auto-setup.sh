@@ -84,14 +84,13 @@ case $choice in
         echo "🔧 Configuring Git credential helper for Overleaf..."
         git config --global credential.helper store
         
-        # URL-encode the email to handle special characters
-        ENCODED_EMAIL=$(echo "$EMAIL" | sed 's/@/%40/g')
-        
-        # Store credentials before cloning
-        echo "https://${ENCODED_EMAIL}:${PASSWORD}@git.overleaf.com" > ~/.git-credentials
+        # Store credentials in the correct format for Overleaf
+        # Format: https://git:TOKEN@git.overleaf.com
+        echo "https://git:${PASSWORD}@git.overleaf.com" > ~/.git-credentials
         
         echo "📥 Cloning project ${PROJECT_ID}..."
-        git clone "https://${ENCODED_EMAIL}:${PASSWORD}@git.overleaf.com/${PROJECT_ID}" /tmp/manual-repo
+        # Clone without credentials in URL - git will use credential helper
+        GIT_TERMINAL_PROMPT=0 git clone "https://git.overleaf.com/${PROJECT_ID}" /tmp/manual-repo
         
         if [ $? -eq 0 ]; then
             git config --global user.email "${EMAIL}"
@@ -254,19 +253,16 @@ if [[ "$REPO_URL" == *"overleaf"* ]]; then
     echo "🔧 Configuring Git credential helper for Overleaf..."
     git config --global credential.helper store
     
-    # URL-encode the username/email to handle special characters
-    ENCODED_USERNAME=$(echo "$USERNAME" | sed 's/@/%40/g')
-    
-    # Store credentials before cloning
-    echo "https://${ENCODED_USERNAME}:${TOKEN}@git.overleaf.com" > ~/.git-credentials
+    # Store credentials in the correct format for Overleaf
+    # Format: https://git:TOKEN@git.overleaf.com
+    echo "https://git:${TOKEN}@git.overleaf.com" > ~/.git-credentials
     
     echo "📥 Cloning project ${PROJECT_ID}..."
-    # Show the clone command (with masked token)
-    MASKED_TOKEN=$(echo "$TOKEN" | sed 's/./*/g')
-    echo "   Command: git clone https://${ENCODED_USERNAME}:${MASKED_TOKEN}@git.overleaf.com/${PROJECT_ID}"
+    # Show the clone command
+    echo "   Command: git clone https://git.overleaf.com/${PROJECT_ID}"
     
-    # Try to clone with error output
-    git clone "https://${ENCODED_USERNAME}:${TOKEN}@git.overleaf.com/${PROJECT_ID}" /tmp/user-repo 2>&1 | grep -v "^remote:"
+    # Try to clone with error output - git will use credential helper
+    GIT_TERMINAL_PROMPT=0 git clone "https://git.overleaf.com/${PROJECT_ID}" /tmp/user-repo 2>&1 | grep -v "^remote:"
     
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
         echo "✅ Overleaf repository cloned successfully"
@@ -322,11 +318,46 @@ mv /tmp/user-repo/* /tmp/user-repo/.[^.]* /workspaces/texra-workspace/ 2>/dev/nu
 rm -rf /workspaces/texra-workspace/.devcontainer
 mv /tmp/.devcontainer /workspaces/texra-workspace/
 
-# Add .devcontainer to local git exclude (not tracked in repo!)
+# Add .devcontainer and common build/temp files to local git exclude (not tracked in repo!)
 mkdir -p /workspaces/texra-workspace/.git/info
-echo "# TeXRA local excludes" >> /workspaces/texra-workspace/.git/info/exclude
-echo ".devcontainer" >> /workspaces/texra-workspace/.git/info/exclude
-echo ".vscode" >> /workspaces/texra-workspace/.git/info/exclude
+cat >> /workspaces/texra-workspace/.git/info/exclude << 'EOF'
+# TeXRA local excludes
+.devcontainer
+.vscode
+
+# Build and version directories
+build/*
+build/
+Versions/
+Versions
+
+# AI model output files
+*dsr1*.*
+*dsv3*.*
+*deepseek*.*
+*gpt*.*
+*_haiku*.*
+*_sonnet*.*
+*_opus*.*
+*o1*.*
+*o3*.*
+*o4*.*
+*kimi*.*
+*qwen*.*
+*diff*.tex
+*gemini*.*
+
+# Example and diff directories
+FiguresEx/
+PapersEx/
+Diffs
+*-diff*.pdf
+
+# History and logs
+History/
+History
+indent.log
+EOF
 
 # Configure git user info
 git config --global user.name "${GIT_NAME}"
