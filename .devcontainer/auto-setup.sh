@@ -43,13 +43,46 @@ case $choice in
         ;;
     3)
         read -p "📎 Overleaf Project URL: " PROJECT_URL
-        read -p "📧 Email: " EMAIL
-        read -s -p "🔑 Password: " PASSWORD
-        echo ""
-        PROJECT_ID=$(echo "$PROJECT_URL" | grep -oP '(?<=project/)[a-z0-9]+')
-        git clone "https://${EMAIL}:${PASSWORD}@git.overleaf.com/${PROJECT_ID}" /tmp/manual-repo
+        
+        # Check if we have Overleaf Codespace secrets
+        if [ ! -z "$OVERLEAF_EMAIL" ] && [ ! -z "$OVERLEAF_TOKEN" ]; then
+            echo "🔐 Using Overleaf Codespace secrets for authentication"
+            EMAIL="$OVERLEAF_EMAIL"
+            PASSWORD="$OVERLEAF_TOKEN"
+        else
+            read -p "📧 Email: " EMAIL
+            read -s -p "🔑 Password: " PASSWORD
+            echo ""
+        fi
+        
+        # Extract project ID from various URL formats (24 hexadecimal characters)
+        PROJECT_ID=$(echo "$PROJECT_URL" | grep -oE '[a-f0-9]{24}')
+        if [ -z "$PROJECT_ID" ]; then
+            echo "❌ Could not extract project ID from URL"
+            echo "   Please ensure URL contains a 24-character project ID"
+            exit 1
+        fi
+        
+        echo "🔧 Configuring Git credential helper for Overleaf..."
         git config --global credential.helper store
-        echo "https://${EMAIL}:${PASSWORD}@git.overleaf.com" > ~/.git-credentials
+        
+        # URL-encode the email to handle special characters
+        ENCODED_EMAIL=$(echo "$EMAIL" | sed 's/@/%40/g')
+        
+        # Store credentials before cloning
+        echo "https://${ENCODED_EMAIL}:${PASSWORD}@git.overleaf.com" > ~/.git-credentials
+        
+        echo "📥 Cloning project ${PROJECT_ID}..."
+        git clone "https://${ENCODED_EMAIL}:${PASSWORD}@git.overleaf.com/${PROJECT_ID}" /tmp/manual-repo
+        
+        if [ $? -eq 0 ]; then
+            git config --global user.email "${EMAIL}"
+            git config --global user.name "$(echo ${EMAIL} | cut -d'@' -f1)"
+            echo "✅ Overleaf repository cloned successfully"
+        else
+            echo "❌ Failed to clone Overleaf repository"
+            echo "   Please check your credentials and project URL"
+        fi
         ;;
 esac
 
@@ -183,18 +216,32 @@ cp -r /workspaces/texra-workspace/.devcontainer /tmp/
 # Clone based on repository type
 if [[ "$REPO_URL" == *"overleaf"* ]]; then
     echo "📚 Detected Overleaf repository"
-    PROJECT_ID=$(echo "$REPO_URL" | grep -oP '(?<=project/)[a-z0-9]+')
+    # Extract project ID from various URL formats (24 hexadecimal characters)
+    PROJECT_ID=$(echo "$REPO_URL" | grep -oE '[a-f0-9]{24}')
     
-    echo "🔐 Cloning with authentication..."
-    git clone "https://${USERNAME}:${TOKEN}@git.overleaf.com/${PROJECT_ID}" /tmp/user-repo 2>/dev/null
+    if [ -z "$PROJECT_ID" ]; then
+        echo "❌ Could not extract Overleaf project ID from URL"
+        echo "   URL should contain a 24-character project ID"
+        exit 1
+    fi
+    
+    echo "🔧 Configuring Git credential helper for Overleaf..."
+    git config --global credential.helper store
+    
+    # URL-encode the username/email to handle special characters
+    ENCODED_USERNAME=$(echo "$USERNAME" | sed 's/@/%40/g')
+    
+    # Store credentials before cloning
+    echo "https://${ENCODED_USERNAME}:${TOKEN}@git.overleaf.com" > ~/.git-credentials
+    
+    echo "📥 Cloning project ${PROJECT_ID}..."
+    git clone "https://${ENCODED_USERNAME}:${TOKEN}@git.overleaf.com/${PROJECT_ID}" /tmp/user-repo 2>/dev/null
     
     if [ $? -eq 0 ]; then
-        # Setup Overleaf credentials for future pushes
-        git config --global credential.helper store
-        echo "https://${USERNAME}:${TOKEN}@git.overleaf.com" > ~/.git-credentials
-        echo "✅ Overleaf authentication configured"
+        echo "✅ Overleaf repository cloned successfully"
     else
         echo "❌ Failed to clone Overleaf repository"
+        echo "   Please check your credentials and project URL"
         exit 1
     fi
     
