@@ -117,10 +117,21 @@ except:
 
 # Parse configuration with sensible defaults
 REPO_URL=$(parse_json 'repoUrl' 'url' '')
-USERNAME=$(parse_json 'username' 'user' '')  
-TOKEN=$(parse_json 'password' 'token' '')
-GIT_NAME=$(parse_json 'gitName' '' '')
-GIT_EMAIL=$(parse_json 'gitEmail' '' '')
+
+# Check if we should use Codespace secrets for Overleaf
+if [[ "$REPO_URL" == *"overleaf"* ]] && [ ! -z "$OVERLEAF_EMAIL" ] && [ ! -z "$OVERLEAF_TOKEN" ]; then
+    echo "🔐 Using Overleaf Codespace secrets for authentication"
+    USERNAME="$OVERLEAF_EMAIL"
+    TOKEN="$OVERLEAF_TOKEN"
+    GIT_EMAIL="$OVERLEAF_EMAIL"
+    GIT_NAME=$(echo "$OVERLEAF_EMAIL" | cut -d'@' -f1)
+else
+    # Use credentials from JSON config
+    USERNAME=$(parse_json 'username' 'user' '')  
+    TOKEN=$(parse_json 'password' 'token' '')
+    GIT_NAME=$(parse_json 'gitName' '' '')
+    GIT_EMAIL=$(parse_json 'gitEmail' '' '')
+fi
 
 # For GitHub repos in Codespaces, use GitHub user info
 if [[ "$REPO_URL" == *"github.com"* ]] && [ ! -z "$GITHUB_USER" ]; then
@@ -256,7 +267,7 @@ echo "   • Run 'git commit' and 'git push'"
 echo ""
 echo "💡 Tips:"
 echo "   • Press Ctrl+S to auto-compile LaTeX"
-echo "   • PDFs are saved to ./PDF folder"
+echo "   • PDFs are saved to ./build folder"
 echo "   • .devcontainer is locally ignored"
 echo ""
 echo "🚀 Happy writing with TeXRA!"
