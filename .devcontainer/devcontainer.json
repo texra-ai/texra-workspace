@@ -14,7 +14,8 @@
         "latex-workshop.latex.autoClean.run": "onBuilt",
         "editor.wordWrap": "on",
         "editor.fontSize": 14,
-        "terminal.integrated.fontSize": 14
+        "terminal.integrated.fontSize": 14,
+        "texra.explorer.agentsDirectory": "/workspaces/custom-agents"
       }
     }
   },

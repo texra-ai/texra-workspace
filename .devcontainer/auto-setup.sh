@@ -352,6 +352,7 @@ Versions
 FiguresEx/
 PapersEx/
 Diffs
+Diffs/
 *-diff*.pdf
 
 # History and logs
@@ -363,6 +364,9 @@ EOF
 # Configure git user info
 git config --global user.name "${GIT_NAME}"
 git config --global user.email "${GIT_EMAIL}"
+
+# Create custom-agents directory for TeXRA agents
+mkdir -p /workspaces/custom-agents
 
 # Clean up sensitive data
 rm -rf /tmp/user-repo /tmp/.devcontainer /tmp/texra-config.json
